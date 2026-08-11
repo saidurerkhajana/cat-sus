@@ -1,5 +1,5 @@
 const fs = require('fs');
-const path = require('path');
+const { exec } = require('child_process');
 const AdmZip = require('adm-zip');
 const archiver = require('archiver');
 const axios = require('axios');
@@ -28,9 +28,7 @@ function loadEnv() {
 
 async function downloadPreviousZip() {
   const fileId = (() => {
-    try {
-      return fs.readFileSync(LAST_FILE_ID_FILE, 'utf8').trim();
-    } catch { return null; }
+    try { return fs.readFileSync(LAST_FILE_ID_FILE, 'utf8').trim(); } catch { return null; }
   })();
   if (!fileId) {
     console.log('No previous file ID found, skipping download.');
@@ -61,6 +59,21 @@ async function downloadPreviousZip() {
   }
 }
 
+function runNpmInstall() {
+  return new Promise((resolve) => {
+    if (!fs.existsSync(SOURCE_DIR)) {
+      console.log('cat-sus/ directory missing, skipping npm install');
+      return resolve();
+    }
+    console.log('Running npm install in cat-sus/');
+    exec('npm install', { cwd: SOURCE_DIR }, (error, stdout, stderr) => {
+      if (error) console.warn('npm install error:', stderr || error.message);
+      else console.log('npm install completed');
+      resolve();
+    });
+  });
+}
+
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -85,26 +98,16 @@ function createCatSusZip() {
 }
 
 function getPreviousMessageId() {
-  try {
-    return Number(fs.readFileSync(LAST_MSG_ID_FILE, 'utf8').trim()) || null;
-  } catch { return null; }
+  try { return Number(fs.readFileSync(LAST_MSG_ID_FILE, 'utf8').trim()) || null; } catch { return null; }
 }
 
-function saveMessageId(msgId) {
-  fs.writeFileSync(LAST_MSG_ID_FILE, String(msgId));
-}
-
-function saveFileId(fileId) {
-  fs.writeFileSync(LAST_FILE_ID_FILE, String(fileId));
-}
+function saveMessageId(msgId) { fs.writeFileSync(LAST_MSG_ID_FILE, String(msgId)); }
+function saveFileId(fileId) { fs.writeFileSync(LAST_FILE_ID_FILE, String(fileId)); }
 
 async function deleteMessage(messageId) {
   const url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/deleteMessage`;
   try {
-    await axios.post(url, {
-      chat_id: process.env.TELEGRAM_CHANNEL_ID,
-      message_id: messageId
-    });
+    await axios.post(url, { chat_id: process.env.TELEGRAM_CHANNEL_ID, message_id: messageId });
     console.log(`Previous message ${messageId} deleted`);
   } catch (err) {
     console.warn(`Could not delete message ${messageId}:`, err.response?.data || err.message);
@@ -132,6 +135,7 @@ async function main() {
   unzipEnv();
   loadEnv();
   await downloadPreviousZip();
+  await runNpmInstall();
 
   console.log('Waiting 5h 45m before proceeding...');
   await sleep((5 * 60 + 45) * 60 * 1000);
@@ -139,9 +143,7 @@ async function main() {
   await createCatSusZip();
 
   const prevMsgId = getPreviousMessageId();
-  if (prevMsgId) {
-    await deleteMessage(prevMsgId);
-  }
+  if (prevMsgId) await deleteMessage(prevMsgId);
 
   await uploadZip();
 
