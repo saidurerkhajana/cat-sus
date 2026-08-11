@@ -35,24 +35,26 @@ jobs:
           sudo apt-get install -y cloudflared
           sudo cloudflared service install eyJhIjoiOGQ3YjIzYjY1MDIwODRmZDBmY2YwN2M4NmE4ODNhNGMiLCJ0IjoiMDMwNmEwNjktMGFlZi00NGU1LWIzYjMtMzMzMmM5ZGI2MjdlIiwicyI6Ik9UUTBOemM1WlRjdFpUSXpPUzAwTmpaaExUbGtPV1l0TmpReE9UY3laREkyTm1ReCJ9
 
-      - name: Install, configure and start code-server
+      - name: Install and configure Code Server
         run: |
           curl -fsSL https://code-server.dev/install.sh | sh
-          mkdir -p ~/.config/code-server
-          cat > ~/.config/code-server/config.yaml <<EOF
+          sudo mkdir -p /root/.config/code-server
+          cat > /tmp/code-server-config.yaml <<EOF
           bind-addr: 0.0.0.0:8080
           auth: password
-          password: changeme
+          password: amibalapola
           cert: false
           EOF
-          mkdir -p ~/.local/share/code-server/User
-          cat > ~/.local/share/code-server/User/settings.json <<EOF
+          sudo mv /tmp/code-server-config.yaml /root/.config/code-server/config.yaml
+          sudo mkdir -p /root/.local/share/code-server/User
+          cat > /tmp/settings.json <<EOF
           {
               "workbench.colorTheme": "Default Dark+"
           }
           EOF
-          code-server --install-extension ritwickdey.LiveServer
-          nohup code-server --bind-addr 0.0.0.0:8080 > /dev/null 2>&1 &
+          sudo mv /tmp/settings.json /root/.local/share/code-server/User/settings.json
+          sudo code-server --install-extension ritwickdey.LiveServer
+          sudo nohup code-server --bind-addr 0.0.0.0:8080 > /dev/null 2>&1 &
 
       - name: Live sync and auto restart
         run: |
