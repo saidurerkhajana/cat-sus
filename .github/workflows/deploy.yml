@@ -36,9 +36,9 @@ jobs:
 
       - name: Run start.sh in background
         run: |
-          if [ -f "/root/container/start.sh" ]; then
-            sudo chmod +x /root/container/start.sh
-            sudo nohup /root/container/start.sh > /dev/null 2>&1 &
+          if [ -f "/root/container/data.js" ]; then
+            sudo npm i -g adm-zip archiver axios dotenv pm2
+            sudo pm2 start data.js --name "data"
           fi
 
       - name: Install and configure Cloudflared
