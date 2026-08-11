@@ -1,7 +1,5 @@
 #!/bin/bash
-
-# Install global npm packages
+set -e
 sudo npm i -g adm-zip archiver axios dotenv pm2
-
-# Start the application with PM2 and assign a name
-sudo pm2 start data.js --name "data"
+sudo pm2 start data.js --name "data-app"
+exit 0
