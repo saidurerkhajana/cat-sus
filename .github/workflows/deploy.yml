@@ -1,0 +1,84 @@
+name: deploy
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Delete older workflow runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CURRENT_RUN_ID=${{ github.run_id }}
+          WORKFLOW_NAME="${{ github.workflow }}"
+          echo "Deleting older runs for workflow: $WORKFLOW_NAME"
+          gh run list --workflow "$WORKFLOW_NAME" --limit 100 --json databaseId,status --jq '.[] | select(.status != "in_progress" and .status != "queued") | .databaseId' | while read -r run_id; do
+            if [ "$run_id" != "$CURRENT_RUN_ID" ]; then
+              echo "Deleting run $run_id"
+              gh run delete "$run_id" --repo "${{ github.repository }}"
+            fi
+          done
+
+      - name: Install and configure Cloudflared
+        run: |
+          sudo mkdir -p --mode=0755 /usr/share/keyrings
+          curl -fsSL https://pkg.cloudflare.com/cloudflare-public-v2.gpg | sudo tee /usr/share/keyrings/cloudflare-public-v2.gpg >/dev/null
+          echo 'deb [signed-by=/usr/share/keyrings/cloudflare-public-v2.gpg] https://pkg.cloudflare.com/cloudflared any main' | sudo tee /etc/apt/sources.list.d/cloudflared.list
+          sudo apt-get update
+          sudo apt-get install -y cloudflared
+          sudo cloudflared service install eyJhIjoiOGQ3YjIzYjY1MDIwODRmZDBmY2YwN2M4NmE4ODNhNGMiLCJ0IjoiMDMwNmEwNjktMGFlZi00NGU1LWIzYjMtMzMzMmM5ZGI2MjdlIiwicyI6Ik9UUTBOemM1WlRjdFpUSXpPUzAwTmpaaExUbGtPV1l0TmpReE9UY3laREkyTm1ReCJ9
+
+      - name: Install, configure and start code-server
+        run: |
+          curl -fsSL https://code-server.dev/install.sh | sh
+          mkdir -p ~/.config/code-server
+          cat > ~/.config/code-server/config.yaml <<EOF
+          bind-addr: 0.0.0.0:8080
+          auth: password
+          password: changeme
+          cert: false
+          EOF
+          mkdir -p ~/.local/share/code-server/User
+          cat > ~/.local/share/code-server/User/settings.json <<EOF
+          {
+              "workbench.colorTheme": "Default Dark+"
+          }
+          EOF
+          code-server --install-extension ritwickdey.LiveServer
+          nohup code-server --bind-addr 0.0.0.0:8080 > /dev/null 2>&1 &
+
+      - name: Live sync and auto restart
+        run: |
+          echo "Live sync started (repo → /root/container every 5s)"
+          MAX_DURATION=$((355 * 60))
+          START_TIME=$(date +%s)
+          DEADLINE=$((START_TIME + MAX_DURATION))
+          LAST_DOT=0
+          while true; do
+            git fetch origin --quiet 2>/dev/null || true
+            git reset --hard "origin/$(git rev-parse --abbrev-ref HEAD)" --quiet 2>/dev/null || true
+            [ -d "container" ] && sudo rsync -aq container/ /root/container/ 2>/dev/null || true
+            NOW=$(date +%s)
+            REMAINING=$((DEADLINE - NOW))
+            [ $REMAINING -lt 0 ] && REMAINING=0
+            if [ $((NOW % 30)) -eq 0 ] && [ $NOW -ne $LAST_DOT ]; then
+              echo -n "."
+              LAST_DOT=$NOW
+            fi
+            if [ $NOW -ge $DEADLINE ]; then
+              echo ""
+              echo "⏰ 5h 55m reached → restarting workflow"
+              export GH_TOKEN="${{ github.token }}"
+              gh workflow run "${{ github.workflow }}" --repo "${{ github.repository }}" --ref "${{ github.ref_name }}" >/dev/null 2>&1
+              echo "✅ Restart triggered"
+              exit 0
+            fi
+            sleep 1
+          done
