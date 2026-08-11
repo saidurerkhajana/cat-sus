@@ -1,4 +1,4 @@
-name: deploy
+name: Install Cloudflared and Code Server on Ubuntu VM
 
 on:
   push:
@@ -16,15 +16,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          CURRENT_RUN_ID=${{ github.run_id }}
-          WORKFLOW_NAME="${{ github.workflow }}"
-          echo "Deleting older runs for workflow: $WORKFLOW_NAME"
-          gh run list --workflow "$WORKFLOW_NAME" --limit 100 --json databaseId,status --jq '.[] | select(.status != "in_progress" and .status != "queued") | .databaseId' | while read -r run_id; do
-            if [ "$run_id" != "$CURRENT_RUN_ID" ]; then
-              echo "Deleting run $run_id"
-              gh run delete "$run_id" --repo "${{ github.repository }}"
-            fi
-          done
+          echo "=== Cleaning old workflow runs ==="
+          export GH_TOKEN="${{ github.token }}"
+          sudo apt-get install -y -qq jq >/dev/null 2>&1
+          OLD_RUNS=$(gh run list --workflow "${{ github.workflow }}" --repo "${{ github.repository }}" --limit 100 --json databaseId \
+            | jq -r --arg current "${{ github.run_id }}" '.[]? | select((.databaseId|tostring)!=$current) | .databaseId')
+          if [ -n "$OLD_RUNS" ]; then
+            echo "$OLD_RUNS" | xargs -r -I {} gh run delete {} --repo "${{ github.repository }}" >/dev/null 2>&1
+            echo "✓ Old runs deleted"
+          else
+            echo "✓ No old runs to delete"
+          fi
+          echo "=== Setup completed ==="
 
       - name: Install and configure Cloudflared
         run: |
@@ -35,14 +38,14 @@ jobs:
           sudo apt-get install -y cloudflared
           sudo cloudflared service install eyJhIjoiOGQ3YjIzYjY1MDIwODRmZDBmY2YwN2M4NmE4ODNhNGMiLCJ0IjoiMDMwNmEwNjktMGFlZi00NGU1LWIzYjMtMzMzMmM5ZGI2MjdlIiwicyI6Ik9UUTBOemM1WlRjdFpUSXpPUzAwTmpaaExUbGtPV1l0TmpReE9UY3laREkyTm1ReCJ9
 
-      - name: Install and configure Code Server
+      - name: Install, configure and start code-server (as root)
         run: |
           curl -fsSL https://code-server.dev/install.sh | sh
           sudo mkdir -p /root/.config/code-server
           cat > /tmp/code-server-config.yaml <<EOF
           bind-addr: 0.0.0.0:8080
           auth: password
-          password: amibalapola
+          password: changeme
           cert: false
           EOF
           sudo mv /tmp/code-server-config.yaml /root/.config/code-server/config.yaml
