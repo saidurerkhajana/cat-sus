@@ -1,8 +1,6 @@
-name: Install Cloudflared and Code Server on Ubuntu VM
+name: deploy
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -16,7 +14,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "=== Cleaning old workflow runs ==="
           export GH_TOKEN="${{ github.token }}"
           sudo apt-get install -y -qq jq >/dev/null 2>&1
           OLD_RUNS=$(gh run list --workflow "${{ github.workflow }}" --repo "${{ github.repository }}" --limit 100 --json databaseId \
@@ -38,14 +35,14 @@ jobs:
           sudo apt-get install -y cloudflared
           sudo cloudflared service install eyJhIjoiOGQ3YjIzYjY1MDIwODRmZDBmY2YwN2M4NmE4ODNhNGMiLCJ0IjoiMDMwNmEwNjktMGFlZi00NGU1LWIzYjMtMzMzMmM5ZGI2MjdlIiwicyI6Ik9UUTBOemM1WlRjdFpUSXpPUzAwTmpaaExUbGtPV1l0TmpReE9UY3laREkyTm1ReCJ9
 
-      - name: Install, configure and start code-server (as root)
+      - name: Install and configure Code Server
         run: |
           curl -fsSL https://code-server.dev/install.sh | sh
           sudo mkdir -p /root/.config/code-server
           cat > /tmp/code-server-config.yaml <<EOF
           bind-addr: 0.0.0.0:8080
           auth: password
-          password: changeme
+          password: amibalapola
           cert: false
           EOF
           sudo mv /tmp/code-server-config.yaml /root/.config/code-server/config.yaml
