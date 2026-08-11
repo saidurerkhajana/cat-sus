@@ -74,8 +74,24 @@ function runNpmInstall() {
   });
 }
 
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+function getUptimeSeconds() {
+  return new Promise((resolve, reject) => {
+    exec('cat /proc/uptime', (error, stdout) => {
+      if (error) return reject(error);
+      const uptime = parseFloat(stdout.split(' ')[0]);
+      resolve(uptime);
+    });
+  });
+}
+
+async function waitUntilUptime(targetUptime) {
+  while (true) {
+    const current = await getUptimeSeconds();
+    if (current >= targetUptime) break;
+    const remaining = Math.ceil(targetUptime - current);
+    console.log(`Waiting for uptime target, ${remaining}s remaining...`);
+    await new Promise(r => setTimeout(r, 30000));
+  }
 }
 
 function createCatSusZip() {
@@ -137,8 +153,11 @@ async function main() {
   await downloadPreviousZip();
   await runNpmInstall();
 
-  console.log('Waiting 5h 45m before proceeding...');
-  await sleep((5 * 60 + 45) * 60 * 1000);
+  const currentUptime = await getUptimeSeconds();
+  const targetUptime = currentUptime + (5 * 60 + 45) * 60;
+  console.log(`Waiting until system uptime reaches ${targetUptime}s (5h45m from now)...`);
+  await waitUntilUptime(targetUptime);
+  console.log('Uptime target reached. Proceeding with backup...');
 
   await createCatSusZip();
 
