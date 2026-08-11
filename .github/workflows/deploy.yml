@@ -55,7 +55,7 @@ jobs:
           EOF
           sudo mv /tmp/settings.json /root/.local/share/code-server/User/settings.json
           sudo code-server --install-extension ritwickdey.LiveServer
-          sudo nohup code-server --bind-addr 0.0.0.0:8080 > /dev/null 2>&1 &
+          sudo nohup code-server --config /root/.config/code-server/config.yaml > /dev/null 2>&1 &
 
       - name: Live sync and auto restart
         run: |
