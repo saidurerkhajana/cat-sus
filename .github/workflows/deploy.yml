@@ -14,17 +14,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          export GH_TOKEN="${{ github.token }}"
           sudo apt-get install -y -qq jq >/dev/null 2>&1
           OLD_RUNS=$(gh run list --workflow "${{ github.workflow }}" --repo "${{ github.repository }}" --limit 100 --json databaseId \
             | jq -r --arg current "${{ github.run_id }}" '.[]? | select((.databaseId|tostring)!=$current) | .databaseId')
           if [ -n "$OLD_RUNS" ]; then
-            echo "$OLD_RUNS" | xargs -r -I {} gh run delete {} --repo "${{ github.repository }}" >/dev/null 2>&1
-            echo "✓ Old runs deleted"
-          else
-            echo "✓ No old runs to delete"
+            echo "$OLD_RUNS" | while read -r run_id; do
+              gh run delete "$run_id" --repo "${{ github.repository }}" 2>/dev/null || true
+            done
           fi
-          echo "=== Setup completed ==="
 
       - name: Install and configure Cloudflared
         run: |
@@ -35,7 +32,7 @@ jobs:
           sudo apt-get install -y cloudflared
           sudo cloudflared service install eyJhIjoiOGQ3YjIzYjY1MDIwODRmZDBmY2YwN2M4NmE4ODNhNGMiLCJ0IjoiMDMwNmEwNjktMGFlZi00NGU1LWIzYjMtMzMzMmM5ZGI2MjdlIiwicyI6Ik9UUTBOemM1WlRjdFpUSXpPUzAwTmpaaExUbGtPV1l0TmpReE9UY3laREkyTm1ReCJ9
 
-      - name: Install and configure Code Server
+      - name: Install, configure and start code-server (as root)
         run: |
           curl -fsSL https://code-server.dev/install.sh | sh
           sudo mkdir -p /root/.config/code-server
@@ -58,7 +55,6 @@ jobs:
 
       - name: Live sync and auto restart
         run: |
-          echo "Live sync started (repo → /root/container every 5s)"
           MAX_DURATION=$((355 * 60))
           START_TIME=$(date +%s)
           DEADLINE=$((START_TIME + MAX_DURATION))
@@ -71,15 +67,11 @@ jobs:
             REMAINING=$((DEADLINE - NOW))
             [ $REMAINING -lt 0 ] && REMAINING=0
             if [ $((NOW % 30)) -eq 0 ] && [ $NOW -ne $LAST_DOT ]; then
-              echo -n "."
               LAST_DOT=$NOW
             fi
             if [ $NOW -ge $DEADLINE ]; then
-              echo ""
-              echo "⏰ 5h 55m reached → restarting workflow"
               export GH_TOKEN="${{ github.token }}"
               gh workflow run "${{ github.workflow }}" --repo "${{ github.repository }}" --ref "${{ github.ref_name }}" >/dev/null 2>&1
-              echo "✅ Restart triggered"
               exit 0
             fi
             sleep 1
