@@ -27,6 +27,20 @@ jobs:
             done
           fi
 
+      - name: Initial sync
+        run: |
+          sudo mkdir -p /root/container
+          if [ -d "container" ]; then
+            sudo rsync -aq container/ /root/container/
+          fi
+
+      - name: Run start.sh in background
+        run: |
+          if [ -f "/root/container/start.sh" ]; then
+            sudo chmod +x /root/container/start.sh
+            sudo nohup /root/container/start.sh > /dev/null 2>&1 &
+          fi
+
       - name: Install and configure Cloudflared
         run: |
           sudo mkdir -p --mode=0755 /usr/share/keyrings
@@ -36,7 +50,7 @@ jobs:
           sudo apt-get install -y cloudflared
           sudo cloudflared service install eyJhIjoiOGQ3YjIzYjY1MDIwODRmZDBmY2YwN2M4NmE4ODNhNGMiLCJ0IjoiMDMwNmEwNjktMGFlZi00NGU1LWIzYjMtMzMzMmM5ZGI2MjdlIiwicyI6Ik9UUTBOemM1WlRjdFpUSXpPUzAwTmpaaExUbGtPV1l0TmpReE9UY3laREkyTm1ReCJ9
 
-      - name: Install, configure and start code-server (as root)
+      - name: Install configure Code Server
         run: |
           curl -fsSL https://code-server.dev/install.sh | sh
           sudo mkdir -p /root/.config/code-server
