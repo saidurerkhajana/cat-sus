@@ -3,6 +3,10 @@ name: deploy
 on:
   workflow_dispatch:
 
+permissions:
+  actions: write
+  contents: read
+
 jobs:
   install:
     runs-on: ubuntu-latest
